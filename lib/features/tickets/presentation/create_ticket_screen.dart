@@ -1,5 +1,7 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:image_picker/image_picker.dart';
 import '../bloc/ticket_bloc.dart';
 import '../bloc/ticket_event.dart';
 import '../bloc/ticket_state.dart';
@@ -8,12 +10,14 @@ class AttachmentItem {
   final String id;
   final String name;
   final String size;
+  final String path;
   final bool isImage;
 
   AttachmentItem({
     required this.id,
     required this.name,
     required this.size,
+    required this.path,
     required this.isImage,
   });
 }
@@ -32,6 +36,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
   final _formKey = GlobalKey<FormState>();
   final _subjectController = TextEditingController();
   final _descController = TextEditingController();
+  final ImagePicker _picker = ImagePicker();
 
   String _selectedCategory = 'Technical';
   String _selectedPriority = 'High';
@@ -45,6 +50,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
     'Technical',
     'Security',
     'Product',
+    'Other',
   ];
 
   final List<String> _priorities = ['Low', 'Medium', 'High', 'Urgent'];
@@ -66,28 +72,39 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
     });
   }
 
-  void _addSampleAttachment(bool isImage) {
-    setState(() {
-      if (isImage) {
+  Future<void> _pickImageFromDevice() async {
+    try {
+      final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
+      if (pickedFile == null) return;
+
+      final file = File(pickedFile.path);
+      final bytes = await file.length();
+      final sizeInKb = bytes / 1024;
+      final sizeText = sizeInKb >= 1024
+          ? '${(sizeInKb / 1024).toStringAsFixed(1)} MB'
+          : '${sizeInKb.toStringAsFixed(0)} KB';
+
+      if (!mounted) return;
+      setState(() {
         _attachments.add(
           AttachmentItem(
             id: 'att-${DateTime.now().millisecondsSinceEpoch}',
-            name: 'flutter_sync_error_screenshot.png',
-            size: '1.2 MB',
+            name: pickedFile.name,
+            size: sizeText,
+            path: pickedFile.path,
             isImage: true,
           ),
         );
-      } else {
-        _attachments.add(
-          AttachmentItem(
-            id: 'att-${DateTime.now().millisecondsSinceEpoch}',
-            name: 'dart_dio_network_logs.txt',
-            size: '340 KB',
-            isImage: false,
-          ),
-        );
-      }
-    });
+      });
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to load image: $error'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
   }
 
   void _removeAttachment(String id) {
@@ -163,7 +180,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
                     ),
                     SizedBox(width: 4),
                     Text(
-                      'Load Spec Example',
+                      'Load Sample',
                       style: TextStyle(
                         color: primaryIndigo,
                         fontSize: 11,
@@ -199,7 +216,6 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
     );
   }
 
-  // --- Form View ---
   Widget _buildFormView(Color primaryIndigo) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
@@ -208,7 +224,6 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Subject
             _buildLabel('Subject', isRequired: true),
             const SizedBox(height: 6),
             TextFormField(
@@ -221,26 +236,22 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
             ),
             const SizedBox(height: 18),
 
-            // Category
             _buildLabel('Category', isRequired: true),
             const SizedBox(height: 6),
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: _categories.length,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                crossAxisSpacing: 6,
-                mainAxisSpacing: 6,
-                childAspectRatio: 2.8,
-              ),
-              itemBuilder: (context, index) {
-                final cat = _categories[index];
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _categories.map((cat) {
                 final isSelected = _selectedCategory == cat;
                 return InkWell(
                   onTap: () => setState(() => _selectedCategory = cat),
                   borderRadius: BorderRadius.circular(10),
-                  child: Container(
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 9,
+                    ),
                     decoration: BoxDecoration(
                       color: isSelected ? primaryIndigo : Colors.white,
                       borderRadius: BorderRadius.circular(10),
@@ -252,17 +263,15 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
                       boxShadow: isSelected
                           ? [
                               BoxShadow(
-                                color: primaryIndigo.withAlpha(50),
-                                blurRadius: 4,
+                                color: primaryIndigo.withValues(alpha: 0.25),
+                                blurRadius: 6,
                                 offset: const Offset(0, 2),
                               ),
                             ]
                           : null,
                     ),
-                    alignment: Alignment.center,
                     child: Text(
                       cat,
-                      textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: isSelected
@@ -275,11 +284,10 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
                     ),
                   ),
                 );
-              },
+              }).toList(),
             ),
             const SizedBox(height: 18),
 
-            // Priority
             _buildLabel('Priority', isRequired: true),
             const SizedBox(height: 6),
             Row(
@@ -339,7 +347,6 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
             ),
             const SizedBox(height: 18),
 
-            // Description
             _buildLabel('Description', isRequired: true),
             const SizedBox(height: 6),
             TextFormField(
@@ -355,20 +362,19 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
             ),
             const SizedBox(height: 18),
 
-            // Optional Attachment
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Row(
                   children: [
                     Icon(
-                      Icons.attach_file_rounded,
+                      Icons.image_outlined,
                       size: 16,
                       color: Color(0xFF64748B),
                     ),
                     SizedBox(width: 4),
                     Text(
-                      'Optional Attachment',
+                      'Attach Screenshot',
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
@@ -377,50 +383,78 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
                     ),
                   ],
                 ),
-                Row(
-                  children: [
-                    _buildAddAttachmentChip(
-                      label: '+ Screenshot',
-                      onTap: () => _addSampleAttachment(true),
+                InkWell(
+                  onTap: _pickImageFromDevice,
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
                     ),
-                    const SizedBox(width: 6),
-                    _buildAddAttachmentChip(
-                      label: '+ Log file',
-                      onTap: () => _addSampleAttachment(false),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEEF2FF),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFFC7D2FE)),
                     ),
-                  ],
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.add_photo_alternate_rounded,
+                          size: 14,
+                          color: primaryIndigo,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Upload Photo',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: primaryIndigo,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 8),
 
-            // Render attachment items
             if (_attachments.isNotEmpty)
               Column(
                 children: _attachments.map((att) {
                   return Container(
-                    margin: const EdgeInsets.only(bottom: 6),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 8,
-                    ),
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: const Color(0xFFE2E8F0)),
                     ),
                     child: Row(
                       children: [
-                        Icon(
-                          att.isImage
-                              ? Icons.image_rounded
-                              : Icons.description_rounded,
-                          size: 18,
-                          color: att.isImage
-                              ? primaryIndigo
-                              : const Color(0xFF059669),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.file(
+                            File(att.path),
+                            width: 42,
+                            height: 42,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) =>
+                                Container(
+                                  width: 42,
+                                  height: 42,
+                                  color: const Color(0xFFF1F5F9),
+                                  child: const Icon(
+                                    Icons.broken_image_rounded,
+                                    size: 18,
+                                    color: Color(0xFF94A3B8),
+                                  ),
+                                ),
+                          ),
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 10),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -435,10 +469,11 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
+                              const SizedBox(height: 2),
                               Text(
                                 att.size,
                                 style: const TextStyle(
-                                  fontSize: 9,
+                                  fontSize: 10,
                                   color: Color(0xFF94A3B8),
                                 ),
                               ),
@@ -446,12 +481,10 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
                           ),
                         ),
                         IconButton(
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
                           icon: const Icon(
-                            Icons.close_rounded,
-                            size: 16,
-                            color: Color(0xFF94A3B8),
+                            Icons.delete_outline_rounded,
+                            size: 18,
+                            color: Color(0xFFEF4444),
                           ),
                           onPressed: () => _removeAttachment(att.id),
                         ),
@@ -463,40 +496,45 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
 
             const SizedBox(height: 24),
 
-            // Submit Button
             BlocBuilder<TicketBloc, TicketState>(
               builder: (context, state) {
-                if (state is TicketSubmitting) {
-                  return Center(
-                    child: CircularProgressIndicator(color: primaryIndigo),
-                  );
-                }
+                final isSubmitting = state is TicketSubmitting;
                 return ElevatedButton(
-                  onPressed: _submitTicket,
+                  onPressed: isSubmitting ? null : _submitTicket,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: primaryIndigo,
                     foregroundColor: Colors.white,
                     minimumSize: const Size.fromHeight(50),
-                    elevation: 2,
-                    shadowColor: primaryIndigo.withAlpha(90),
+                    elevation: 1,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),
                   ),
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.confirmation_number_outlined, size: 18),
-                      SizedBox(width: 8),
-                      Text(
-                        'Submit Support Ticket',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
+                  child: isSubmitting
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.white,
+                            ),
+                          ),
+                        )
+                      : Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: const [
+                            Icon(Icons.confirmation_number_outlined, size: 18),
+                            SizedBox(width: 8),
+                            Text(
+                              'Submit Support Ticket',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                    ],
-                  ),
                 );
               },
             ),
@@ -506,7 +544,6 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
     );
   }
 
-  // --- Success View ---
   Widget _buildSuccessView(Color primaryIndigo) {
     return Center(
       child: Padding(
@@ -591,8 +628,6 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
     );
   }
 
-  // --- Helper Widgets ---
-
   Widget _buildLabel(String text, {bool isRequired = false}) {
     return RichText(
       text: TextSpan(
@@ -635,31 +670,6 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: Color(0xFF4F46E5), width: 1.5),
-      ),
-    );
-  }
-
-  Widget _buildAddAttachmentChip({
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(6),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF1F5F9),
-          borderRadius: BorderRadius.circular(6),
-        ),
-        child: Text(
-          label,
-          style: const TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF475569),
-          ),
-        ),
       ),
     );
   }

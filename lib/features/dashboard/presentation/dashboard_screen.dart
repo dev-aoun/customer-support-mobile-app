@@ -5,11 +5,39 @@ import '../../tickets/bloc/ticket_bloc.dart';
 import '../../tickets/bloc/ticket_state.dart';
 import '../../tickets/data/ticket_model.dart';
 
-class DashboardContent extends StatelessWidget {
+class DashboardContent extends StatefulWidget {
   final UserModel? user;
   final Function(int tabIndex)? onNavigateTab;
 
   const DashboardContent({super.key, this.user, this.onNavigateTab});
+
+  @override
+  State<DashboardContent> createState() => _DashboardContentState();
+}
+
+class _DashboardContentState extends State<DashboardContent>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _bellController;
+  late Animation<double> _pulseScale;
+
+  @override
+  void initState() {
+    super.initState();
+    _bellController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    )..repeat(reverse: true);
+
+    _pulseScale = Tween<double>(begin: 0.85, end: 1.25).animate(
+      CurvedAnimation(parent: _bellController, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _bellController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -18,50 +46,161 @@ class DashboardContent extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: bgColor,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        titleSpacing: 16,
-        title: Row(
-          children: [
-            CircleAvatar(
-              radius: 18,
-              backgroundColor: const Color(0xFFE0E7FF),
-              child: Text(
-                (user?.name.isNotEmpty ?? false)
-                    ? user!.name[0].toUpperCase()
-                    : 'C',
-                style: const TextStyle(
-                  color: primaryIndigo,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 15,
-                ),
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(72),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          alignment: Alignment.bottomCenter,
+          child: SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 8.0),
+              child: Row(
+                children: [
+                  InkWell(
+                    onTap: () => widget.onNavigateTab?.call(5),
+                    borderRadius: BorderRadius.circular(24),
+                    child: Container(
+                      padding: const EdgeInsets.all(2.5),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF6366F1), Color(0xFF4F46E5)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: primaryIndigo.withValues(alpha: 0.2),
+                            blurRadius: 8,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: CircleAvatar(
+                        radius: 19,
+                        backgroundColor: Colors.white,
+                        child: CircleAvatar(
+                          radius: 17,
+                          backgroundColor: const Color(0xFFEEF2FF),
+                          child: Text(
+                            (widget.user?.name.isNotEmpty ?? false)
+                                ? widget.user!.name[0].toUpperCase()
+                                : 'C',
+                            style: const TextStyle(
+                              color: primaryIndigo,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 6,
+                              height: 6,
+                              decoration: const BoxDecoration(
+                                color: Color(0xFF10B981),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 5),
+                            const Text(
+                              'CONNECTED WORKSPACE',
+                              style: TextStyle(
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.6,
+                                color: Color(0xFF64748B),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 1),
+                        Text(
+                          '${widget.user?.name ?? "Customer"} 👋',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF0F172A),
+                            letterSpacing: -0.3,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  InkWell(
+                    onTap: () => widget.onNavigateTab?.call(4),
+                    borderRadius: BorderRadius.circular(16),
+                    child: Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.03),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          const Icon(
+                            Icons.notifications_outlined,
+                            color: Color(0xFF334155),
+                            size: 22,
+                          ),
+                          Positioned(
+                            right: 9,
+                            top: 9,
+                            child: ScaleTransition(
+                              scale: _pulseScale,
+                              child: Container(
+                                width: 8,
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFEF4444),
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: Colors.white,
+                                    width: 1.5,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(
+                                        0xFFEF4444,
+                                      ).withValues(alpha: 0.4),
+                                      blurRadius: 4,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(width: 10),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'WELCOME BACK',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.8,
-                    color: Color(0xFF64748B),
-                  ),
-                ),
-                Text(
-                  '${user?.name ?? "Customer"} 👋',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF0F172A),
-                  ),
-                ),
-              ],
-            ),
-          ],
+          ),
         ),
       ),
       body: BlocBuilder<TicketBloc, TicketState>(
@@ -71,7 +210,6 @@ class DashboardContent extends StatelessWidget {
             allTickets = state.tickets;
           }
 
-          // Compute dynamic statistics from TicketBloc
           final openCount = allTickets.where((t) => t.status == 'Open').length;
           final inProgressCount = allTickets
               .where((t) => t.status == 'In Progress')
@@ -81,12 +219,12 @@ class DashboardContent extends StatelessWidget {
               .length;
           final totalCount = allTickets.length;
 
-          // Filter active tickets
           final activeTickets = allTickets
               .where((t) => t.status != 'Resolved' && t.status != 'Closed')
               .toList();
 
           return SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
             padding: const EdgeInsets.symmetric(
               horizontal: 16.0,
               vertical: 8.0,
@@ -94,11 +232,8 @@ class DashboardContent extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Quick AI Support Action Banner
                 _buildAiBanner(context, primaryIndigo),
                 const SizedBox(height: 20),
-
-                // Support Overview (Live Stats Grid)
                 _buildStatsHeader(context, totalCount),
                 const SizedBox(height: 10),
                 Row(
@@ -107,41 +242,44 @@ class DashboardContent extends StatelessWidget {
                       count: openCount,
                       label: 'Open',
                       color: const Color(0xFF2563EB),
+                      icon: Icons.mark_email_unread_outlined,
                     ),
                     const SizedBox(width: 8),
                     _buildStatBox(
                       count: inProgressCount,
                       label: 'In Progress',
                       color: const Color(0xFFD97706),
+                      icon: Icons.pending_actions_rounded,
                     ),
                     const SizedBox(width: 8),
                     _buildStatBox(
                       count: resolvedCount,
                       label: 'Resolved',
                       color: const Color(0xFF059669),
+                      icon: Icons.check_circle_outline_rounded,
                     ),
                   ],
                 ),
                 const SizedBox(height: 22),
-
-                // Active Support Tickets Header & Dynamic Cards
                 _buildActiveTicketsHeader(context),
                 const SizedBox(height: 10),
-
                 if (activeTickets.isEmpty)
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 22,
+                      horizontal: 16,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(16),
                       border: Border.all(color: const Color(0xFFE2E8F0)),
                     ),
                     child: Column(
                       children: [
                         const Icon(
-                          Icons.check_circle_outline_rounded,
-                          size: 36,
+                          Icons.task_alt_rounded,
+                          size: 38,
                           color: Color(0xFF10B981),
                         ),
                         const SizedBox(height: 8),
@@ -149,17 +287,18 @@ class DashboardContent extends StatelessWidget {
                           'No active tickets! All issues resolved.',
                           style: TextStyle(
                             fontSize: 12,
+                            fontWeight: FontWeight.w600,
                             color: Color(0xFF64748B),
                           ),
                         ),
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 8),
                         InkWell(
-                          onTap: () => onNavigateTab?.call(2),
+                          onTap: () => widget.onNavigateTab?.call(2),
                           child: const Text(
                             '+ Create a new support ticket',
                             style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
                               color: primaryIndigo,
                             ),
                           ),
@@ -191,20 +330,15 @@ class DashboardContent extends StatelessWidget {
                         category: ticket.category,
                         date:
                             '${ticket.updatedAt.day}/${ticket.updatedAt.month}',
-                        onTap: () => onNavigateTab?.call(3),
+                        onTap: () => widget.onNavigateTab?.call(3),
                       ),
                     );
                   }),
-
                 const SizedBox(height: 22),
-
-                // Recent AI Conversations
                 _buildRecentConversationsSection(context),
                 const SizedBox(height: 22),
-
-                // Knowledge Base FAQs Card
                 _buildKnowledgeBaseCard(context),
-                const SizedBox(height: 32),
+                const SizedBox(height: 24),
               ],
             ),
           );
@@ -222,10 +356,10 @@ class DashboardContent extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: primaryIndigo.withAlpha(50),
+            color: primaryIndigo.withValues(alpha: 0.22),
             blurRadius: 14,
             offset: const Offset(0, 6),
           ),
@@ -247,7 +381,7 @@ class DashboardContent extends StatelessWidget {
                         vertical: 3,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.white.withAlpha(45),
+                        color: Colors.white.withValues(alpha: 0.18),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: const Row(
@@ -281,7 +415,7 @@ class DashboardContent extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     const Text(
-                      'Ask questions through our RAG-powered AI assistant anytime.',
+                      'Ask questions through our SAI assistant anytime.',
                       style: TextStyle(color: Color(0xFFE0E7FF), fontSize: 11),
                     ),
                   ],
@@ -291,7 +425,7 @@ class DashboardContent extends StatelessWidget {
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: Colors.white.withAlpha(35),
+                  color: Colors.white.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: const Icon(
@@ -305,8 +439,10 @@ class DashboardContent extends StatelessWidget {
           const SizedBox(height: 14),
           Container(
             padding: const EdgeInsets.only(top: 10),
-            decoration: const BoxDecoration(
-              border: Border(top: BorderSide(color: Colors.white24)),
+            decoration: BoxDecoration(
+              border: Border(
+                top: BorderSide(color: Colors.white.withValues(alpha: 0.24)),
+              ),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -320,7 +456,7 @@ class DashboardContent extends StatelessWidget {
                   ),
                 ),
                 InkWell(
-                  onTap: () => onNavigateTab?.call(1),
+                  onTap: () => widget.onNavigateTab?.call(1),
                   child: Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 10,
@@ -361,7 +497,7 @@ class DashboardContent extends StatelessWidget {
           ),
         ),
         InkWell(
-          onTap: () => onNavigateTab?.call(3),
+          onTap: () => widget.onNavigateTab?.call(3),
           child: Text(
             'View All ($total)',
             style: const TextStyle(
@@ -379,21 +515,24 @@ class DashboardContent extends StatelessWidget {
     required int count,
     required String label,
     required Color color,
+    required IconData icon,
   }) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(color: const Color(0xFFE2E8F0)),
         ),
         child: Column(
           children: [
+            Icon(icon, size: 18, color: color),
+            const SizedBox(height: 6),
             Text(
               '$count',
               style: TextStyle(
-                fontSize: 18,
+                fontSize: 17,
                 fontWeight: FontWeight.w800,
                 color: color,
               ),
@@ -402,7 +541,7 @@ class DashboardContent extends StatelessWidget {
             Text(
               label,
               style: const TextStyle(
-                fontSize: 11,
+                fontSize: 10,
                 fontWeight: FontWeight.w600,
                 color: Color(0xFF64748B),
               ),
@@ -420,11 +559,11 @@ class DashboardContent extends StatelessWidget {
         const Row(
           children: [
             Icon(
-              Icons.error_outline_rounded,
-              color: Color(0xFFD97706),
-              size: 16,
+              Icons.confirmation_number_outlined,
+              color: Color(0xFF4F46E5),
+              size: 17,
             ),
-            SizedBox(width: 4),
+            SizedBox(width: 5),
             Text(
               'Active Support Tickets',
               style: TextStyle(
@@ -436,21 +575,17 @@ class DashboardContent extends StatelessWidget {
           ],
         ),
         InkWell(
-          onTap: () => onNavigateTab?.call(2),
+          onTap: () => widget.onNavigateTab?.call(2),
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
             decoration: BoxDecoration(
               color: const Color(0xFFEEF2FF),
               borderRadius: BorderRadius.circular(8),
             ),
             child: const Row(
               children: [
-                Icon(
-                  Icons.add_circle_outline_rounded,
-                  size: 14,
-                  color: Color(0xFF4F46E5),
-                ),
-                SizedBox(width: 4),
+                Icon(Icons.add_rounded, size: 15, color: Color(0xFF4F46E5)),
+                SizedBox(width: 3),
                 Text(
                   'New Ticket',
                   style: TextStyle(
@@ -479,12 +614,12 @@ class DashboardContent extends StatelessWidget {
   }) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(14),
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(color: const Color(0xFFE2E8F0)),
         ),
         child: Column(
@@ -504,8 +639,8 @@ class DashboardContent extends StatelessWidget {
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 7,
-                    vertical: 2,
+                    horizontal: 8,
+                    vertical: 3,
                   ),
                   decoration: BoxDecoration(
                     color: statusBg,
@@ -544,12 +679,13 @@ class DashboardContent extends StatelessWidget {
                   ),
                   decoration: BoxDecoration(
                     color: const Color(0xFFF1F5F9),
-                    borderRadius: BorderRadius.circular(4),
+                    borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
                     category,
                     style: const TextStyle(
                       fontSize: 10,
+                      fontWeight: FontWeight.w500,
                       color: Color(0xFF475569),
                     ),
                   ),
@@ -557,8 +693,8 @@ class DashboardContent extends StatelessWidget {
                 Row(
                   children: [
                     const Icon(
-                      Icons.access_time,
-                      size: 12,
+                      Icons.schedule_rounded,
+                      size: 13,
                       color: Color(0xFF94A3B8),
                     ),
                     const SizedBox(width: 3),
@@ -585,8 +721,12 @@ class DashboardContent extends StatelessWidget {
       children: [
         const Row(
           children: [
-            Icon(Icons.chat_outlined, color: Color(0xFF4F46E5), size: 16),
-            SizedBox(width: 4),
+            Icon(
+              Icons.chat_bubble_outline_rounded,
+              color: Color(0xFF4F46E5),
+              size: 16,
+            ),
+            SizedBox(width: 5),
             Text(
               'Recent AI Conversations',
               style: TextStyle(
@@ -601,7 +741,7 @@ class DashboardContent extends StatelessWidget {
         _buildConversationTile(
           title: 'How to configure custom webhook?',
           snippet: 'You can add webhook headers in Settings → Integrations.',
-          onTap: () => onNavigateTab?.call(1),
+          onTap: () => widget.onNavigateTab?.call(1),
         ),
       ],
     );
@@ -614,12 +754,12 @@ class DashboardContent extends StatelessWidget {
   }) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(14),
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(color: const Color(0xFFE2E8F0)),
         ),
         child: Row(
@@ -692,20 +832,17 @@ class DashboardContent extends StatelessWidget {
                   Icon(Icons.menu_book_rounded, size: 16, color: primaryIndigo),
                   SizedBox(width: 6),
                   Text(
-                    'Popular Knowledge Base\nFAQs',
+                    'Knowledge Base Guides',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w800,
                       color: Color(0xFF1E1B4B),
-                      height: 1.2,
                     ),
                   ),
                 ],
               ),
               InkWell(
-                onTap: () => onNavigateTab?.call(
-                  6,
-                ), // Navigates to full Knowledge Base tab
+                onTap: () => widget.onNavigateTab?.call(6),
                 child: const Row(
                   children: [
                     Text(
@@ -716,14 +853,11 @@ class DashboardContent extends StatelessWidget {
                         color: primaryIndigo,
                       ),
                     ),
-                    SizedBox(width: 4),
-                    Text(
-                      '→',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: primaryIndigo,
-                      ),
+                    SizedBox(width: 3),
+                    Icon(
+                      Icons.arrow_forward_rounded,
+                      size: 12,
+                      color: primaryIndigo,
                     ),
                   ],
                 ),
@@ -735,7 +869,7 @@ class DashboardContent extends StatelessWidget {
             children: [
               Expanded(
                 child: InkWell(
-                  onTap: () => onNavigateTab?.call(6),
+                  onTap: () => widget.onNavigateTab?.call(6),
                   borderRadius: BorderRadius.circular(12),
                   child: Container(
                     padding: const EdgeInsets.all(12),
@@ -771,7 +905,7 @@ class DashboardContent extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: InkWell(
-                  onTap: () => onNavigateTab?.call(6),
+                  onTap: () => widget.onNavigateTab?.call(6),
                   borderRadius: BorderRadius.circular(12),
                   child: Container(
                     padding: const EdgeInsets.all(12),
@@ -793,7 +927,7 @@ class DashboardContent extends StatelessWidget {
                         ),
                         SizedBox(height: 3),
                         Text(
-                          'Dart & Python integration',
+                          'Dart & Python setup',
                           style: TextStyle(
                             fontSize: 9,
                             color: Color(0xFF64748B),

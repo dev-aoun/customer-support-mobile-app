@@ -15,18 +15,30 @@ class AuthScreen extends StatefulWidget {
 class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
   bool isSignIn = true;
   bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
 
   final _signInFormKey = GlobalKey<FormState>();
   final _signUpFormKey = GlobalKey<FormState>();
 
+  // Form Controllers
   final _nameController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _locationController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
 
+  // Animation Controllers
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
   late AnimationController _backgroundBlobController;
   late AnimationController _emojiBounceController;
+
+  // Password Real-Time Validation Flags
+  bool _hasMinLength = false;
+  bool _hasUppercase = false;
+  bool _hasDigits = false;
+  bool _hasSpecialChar = false;
 
   @override
   void initState() {
@@ -34,7 +46,7 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
 
     _fadeController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 400),
+      duration: const Duration(milliseconds: 350),
     );
     _fadeAnimation = CurvedAnimation(
       parent: _fadeController,
@@ -42,24 +54,38 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
     );
     _fadeController.forward();
 
-    // Gentle ambient background motion
     _backgroundBlobController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 12),
     )..repeat(reverse: true);
 
-    // Interactive emoji bounce
     _emojiBounceController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1400),
     )..repeat(reverse: true);
+
+    _passwordController.addListener(_validatePasswordRules);
+  }
+
+  void _validatePasswordRules() {
+    final text = _passwordController.text;
+    setState(() {
+      _hasMinLength = text.length >= 8;
+      _hasUppercase = text.contains(RegExp(r'[A-Z]'));
+      _hasDigits = text.contains(RegExp(r'[0-9]'));
+      _hasSpecialChar = text.contains(RegExp(r'[!@#\$%^&*(),.?":{}|<>]'));
+    });
   }
 
   @override
   void dispose() {
     _nameController.dispose();
+    _phoneController.dispose();
+    _locationController.dispose();
     _emailController.dispose();
+    _passwordController.removeListener(_validatePasswordRules);
     _passwordController.dispose();
+    _confirmPasswordController.dispose();
     _fadeController.dispose();
     _backgroundBlobController.dispose();
     _emojiBounceController.dispose();
@@ -88,6 +114,25 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
 
   void _onSignUp() {
     if (_signUpFormKey.currentState?.validate() ?? false) {
+      final isStrong =
+          _hasMinLength && _hasUppercase && _hasDigits && _hasSpecialChar;
+      if (!isStrong) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text(
+              'Please satisfy all strong password conditions below.',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            backgroundColor: const Color(0xFFDC2626),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        );
+        return;
+      }
+
       context.read<AuthBloc>().add(
         RegisterSubmittedEvent(
           name: _nameController.text.trim(),
@@ -143,18 +188,18 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
                 child: SingleChildScrollView(
                   physics: const BouncingScrollPhysics(),
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 22.0,
+                    horizontal: 20.0,
                     vertical: 20.0,
                   ),
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 440),
+                    constraints: const BoxConstraints(maxWidth: 460),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         _buildFriendlyHeader(primaryIndigo),
-                        const SizedBox(height: 20),
-                        _buildAuthCard(primaryIndigo),
                         const SizedBox(height: 18),
+                        _buildAuthCard(primaryIndigo),
+                        const SizedBox(height: 16),
                         _buildFooterSecurityNote(),
                       ],
                     ),
@@ -240,7 +285,6 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
           clipBehavior: Clip.none,
           alignment: Alignment.center,
           children: [
-            // Logo Container
             Container(
               width: 68,
               height: 68,
@@ -277,8 +321,6 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
                 ),
               ),
             ),
-
-            // Animated Emoji Badge
             Positioned(
               right: -10,
               bottom: -6,
@@ -327,8 +369,8 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
         const SizedBox(height: 3),
         Text(
           isSignIn
-              ? 'Welcome back! Happy to help you today'
-              : 'Create your account to get instant support',
+              ? 'Welcome back! Sign in to access your portal'
+              : 'Register your account to manage tickets and sync',
           textAlign: TextAlign.center,
           style: const TextStyle(
             fontSize: 12,
@@ -360,7 +402,7 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _buildSegmentedTab(primaryIndigo),
-          const SizedBox(height: 20),
+          const SizedBox(height: 18),
           FadeTransition(
             opacity: _fadeAnimation,
             child: isSignIn
@@ -462,11 +504,11 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _buildFieldLabel('Work Email'),
+          _buildFieldLabel('Email'),
           const SizedBox(height: 6),
           _buildInputField(
             controller: _emailController,
-            hint: 'name@company.com',
+            hint: 'name@email.com',
             icon: Icons.mail_outline_rounded,
             keyboardType: TextInputType.emailAddress,
             validator: (val) {
@@ -515,6 +557,12 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
             hint: '••••••••••••',
             icon: Icons.lock_outline_rounded,
             isPassword: true,
+            obscureText: _obscurePassword,
+            onToggleVisibility: () {
+              setState(() {
+                _obscurePassword = !_obscurePassword;
+              });
+            },
             validator: (val) => val == null || val.isEmpty
                 ? 'Please enter your password'
                 : val.length < 6
@@ -539,22 +587,58 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // 1. Full Name
           _buildFieldLabel('Full Name'),
           const SizedBox(height: 6),
           _buildInputField(
             controller: _nameController,
-            hint: 'Alex Rivera',
+            hint: 'Hammad Mehmood',
             icon: Icons.person_outline_rounded,
             validator: (val) => val == null || val.trim().isEmpty
                 ? 'Please enter your full name'
                 : null,
           ),
-          const SizedBox(height: 14),
-          _buildFieldLabel('Work Email'),
+          const SizedBox(height: 12),
+
+          // 2. Phone Number
+          _buildFieldLabel('Phone Number'),
+          const SizedBox(height: 6),
+          _buildInputField(
+            controller: _phoneController,
+            hint: '+92 300 1234567',
+            icon: Icons.phone_outlined,
+            keyboardType: TextInputType.phone,
+            validator: (val) {
+              if (val == null || val.trim().isEmpty) {
+                return 'Please enter your phone number';
+              }
+              if (val.trim().length < 7) {
+                return 'Please enter a valid phone number';
+              }
+              return null;
+            },
+          ),
+          const SizedBox(height: 12),
+
+          // 3. City / Country
+          _buildFieldLabel('City / Country'),
+          const SizedBox(height: 6),
+          _buildInputField(
+            controller: _locationController,
+            hint: 'Lahore, Pakistan',
+            icon: Icons.location_on_outlined,
+            validator: (val) => val == null || val.trim().isEmpty
+                ? 'Please enter your city and country'
+                : null,
+          ),
+          const SizedBox(height: 12),
+
+          // 4. Work Email
+          _buildFieldLabel('Email'),
           const SizedBox(height: 6),
           _buildInputField(
             controller: _emailController,
-            hint: 'name@company.com',
+            hint: 'name@email.com',
             icon: Icons.mail_outline_rounded,
             keyboardType: TextInputType.emailAddress,
             validator: (val) {
@@ -567,19 +651,96 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
               return null;
             },
           ),
-          const SizedBox(height: 14),
-          _buildFieldLabel('Set Password'),
+          const SizedBox(height: 12),
+
+          // 5. Strong Password
+          _buildFieldLabel('Strong Password'),
           const SizedBox(height: 6),
           _buildInputField(
             controller: _passwordController,
-            hint: 'Minimum 6 characters',
+            hint: 'Min. 8 chars, 1 upper, 1 digit, 1 symbol',
             icon: Icons.lock_outline_rounded,
             isPassword: true,
-            validator: (val) => val == null || val.length < 6
-                ? 'Password must be at least 6 characters'
-                : null,
+            obscureText: _obscurePassword,
+            onToggleVisibility: () {
+              setState(() {
+                _obscurePassword = !_obscurePassword;
+              });
+            },
+            validator: (val) {
+              if (val == null || val.isEmpty) {
+                return 'Password is required';
+              }
+              if (val.length < 8) {
+                return 'Must be at least 8 characters long';
+              }
+              return null;
+            },
+          ),
+          const SizedBox(height: 10),
+
+          // Password Strength Requirements Badges
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Password Requirements:',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF64748B),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: [
+                    _buildRuleItem('8+ Chars', _hasMinLength),
+                    _buildRuleItem('Uppercase (A-Z)', _hasUppercase),
+                    _buildRuleItem('Number (0-9)', _hasDigits),
+                    _buildRuleItem('Symbol (!@#\$)', _hasSpecialChar),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // 6. Rewrite / Confirm Password
+          _buildFieldLabel('Rewrite Password'),
+          const SizedBox(height: 6),
+          _buildInputField(
+            controller: _confirmPasswordController,
+            hint: 'Re-enter your password',
+            icon: Icons.lock_reset_rounded,
+            isPassword: true,
+            obscureText: _obscureConfirmPassword,
+            onToggleVisibility: () {
+              setState(() {
+                _obscureConfirmPassword = !_obscureConfirmPassword;
+              });
+            },
+            validator: (val) {
+              if (val == null || val.isEmpty) {
+                return 'Please confirm your password';
+              }
+              if (val != _passwordController.text) {
+                return 'Passwords do not match';
+              }
+              return null;
+            },
           ),
           const SizedBox(height: 20),
+
+          // CTA Submit
           _buildActionButton(
             label: 'Create Account',
             onPressed: _onSignUp,
@@ -590,6 +751,30 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
     );
   }
 
+  // --- Helper: Password Rule Badge ---
+  Widget _buildRuleItem(String text, bool met) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          met ? Icons.check_circle_rounded : Icons.radio_button_unchecked,
+          size: 13,
+          color: met ? const Color(0xFF10B981) : const Color(0xFF94A3B8),
+        ),
+        const SizedBox(width: 4),
+        Text(
+          text,
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            color: met ? const Color(0xFF0F172A) : const Color(0xFF94A3B8),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // --- Helper: Field Label ---
   Widget _buildFieldLabel(String label) {
     return Text(
       label,
@@ -601,17 +786,20 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
     );
   }
 
+  // --- Helper: Input Field ---
   Widget _buildInputField({
     required TextEditingController controller,
     required String hint,
     required IconData icon,
     bool isPassword = false,
+    bool obscureText = false,
+    VoidCallback? onToggleVisibility,
     TextInputType keyboardType = TextInputType.text,
     String? Function(String?)? validator,
   }) {
     return TextFormField(
       controller: controller,
-      obscureText: isPassword ? _obscurePassword : false,
+      obscureText: isPassword ? obscureText : false,
       keyboardType: keyboardType,
       validator: validator,
       style: const TextStyle(
@@ -625,24 +813,20 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
         hintText: hint,
         hintStyle: const TextStyle(
           color: Color(0xFF94A3B8),
-          fontSize: 13,
+          fontSize: 12,
           fontWeight: FontWeight.w400,
         ),
         prefixIcon: Icon(icon, color: const Color(0xFF64748B), size: 18),
         suffixIcon: isPassword
             ? IconButton(
                 icon: Icon(
-                  _obscurePassword
+                  obscureText
                       ? Icons.visibility_off_outlined
                       : Icons.visibility_outlined,
                   color: const Color(0xFF94A3B8),
                   size: 18,
                 ),
-                onPressed: () {
-                  setState(() {
-                    _obscurePassword = !_obscurePassword;
-                  });
-                },
+                onPressed: onToggleVisibility,
               )
             : null,
         contentPadding: const EdgeInsets.symmetric(
@@ -673,6 +857,7 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
     );
   }
 
+  // --- Helper: Action Button ---
   Widget _buildActionButton({
     required String label,
     required VoidCallback onPressed,
@@ -724,6 +909,7 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
     );
   }
 
+  // --- Helper: Footer Note ---
   Widget _buildFooterSecurityNote() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,

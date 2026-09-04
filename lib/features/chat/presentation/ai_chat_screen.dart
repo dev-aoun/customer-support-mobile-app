@@ -5,10 +5,17 @@ import '../data/chat_repository.dart';
 
 class AIChatScreen extends StatefulWidget {
   final UserModel? user;
-  final VoidCallback? onBack;
-  final VoidCallback? onLogTicket;
+  final VoidCallback onBack;
+  final VoidCallback onLogTicket;
+  final bool isLiveAgent; // <-- Add this field
 
-  const AIChatScreen({super.key, this.user, this.onBack, this.onLogTicket});
+  const AIChatScreen({
+    super.key,
+    this.user,
+    required this.onBack,
+    required this.onLogTicket,
+    this.isLiveAgent = false, // <-- Add this parameter with default false
+  });
 
   @override
   State<AIChatScreen> createState() => _AIChatScreenState();
