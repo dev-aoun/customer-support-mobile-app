@@ -1,44 +1,27 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../bloc/ticket_bloc.dart';
+import '../bloc/ticket_event.dart';
 import '../bloc/ticket_state.dart';
 import '../data/ticket_model.dart';
+import '../data/ticket_repository.dart';
 
-class TicketTimelineEvent {
-  final String id;
-  final String title;
-  final String description;
-  final DateTime timestamp;
-
-  TicketTimelineEvent({
-    required this.id,
-    required this.title,
-    required this.description,
-    required this.timestamp,
-  });
-}
-
-class TicketComment {
-  final String id;
-  final String authorName;
-  final String authorRole; // 'customer' or 'agent'
-  final String message;
-  final DateTime timestamp;
-
-  TicketComment({
-    required this.id,
-    required this.authorName,
-    required this.authorRole,
-    required this.message,
-    required this.timestamp,
-  });
-}
+// TicketComment / TicketTimelineEvent live in ticket_model.dart - this file
+// used to redeclare them, which produced two distinct types with the same
+// name and made the repository's results unassignable here.
 
 class TicketListScreen extends StatefulWidget {
   final Function(int tabIndex)? onNavigateTab;
+  final Function(TicketModel ticket)? onOpenLiveChat;
   final String? initialTicketId;
 
-  const TicketListScreen({super.key, this.onNavigateTab, this.initialTicketId});
+  const TicketListScreen({
+    super.key,
+    this.onNavigateTab,
+    this.onOpenLiveChat,
+    this.initialTicketId,
+  });
 
   @override
   State<TicketListScreen> createState() => _TicketListScreenState();
@@ -52,6 +35,7 @@ class _TicketListScreenState extends State<TicketListScreen> {
   String _filterStatus = 'all';
   String _searchQuery = '';
   TicketModel? _activeTicket;
+  Timer? _ticketPollTimer;
 
   final List<String> _statusFilters = [
     'all',
@@ -62,9 +46,10 @@ class _TicketListScreenState extends State<TicketListScreen> {
     'Closed',
   ];
 
-  // In-memory conversation & timeline stores for interactive demo
+  // Replies fetched from the API, keyed by ticket id.
   final Map<String, List<TicketComment>> _commentsMap = {};
-  final Map<String, List<TicketTimelineEvent>> _timelineMap = {};
+  bool _loadingComments = false;
+  bool _sendingComment = false;
 
   @override
   void initState() {
@@ -76,82 +61,133 @@ class _TicketListScreenState extends State<TicketListScreen> {
     });
   }
 
+  /// Open a ticket and pull its real conversation from the backend - this is
+  /// also how a customer sees replies an agent posted from the web dashboard.
+  Future<void> _openTicket(TicketModel ticket) async {
+    setState(() {
+      _activeTicket = ticket;
+      _loadingComments = true;
+    });
+    await _loadComments(ticket.id);
+    _startTicketPolling(ticket.id);
+  }
+
+  void _startTicketPolling(String ticketId) {
+    _ticketPollTimer?.cancel();
+    _ticketPollTimer = Timer.periodic(const Duration(seconds: 4), (_) async {
+      if (!mounted || _activeTicket?.id != ticketId) return;
+      try {
+        final comments =
+            await context.read<TicketRepository>().fetchComments(ticketId);
+        if (mounted &&
+            (_commentsMap[ticketId]?.length != comments.length)) {
+          setState(() {
+            _commentsMap[ticketId] = comments;
+          });
+        }
+      } catch (_) {}
+    });
+  }
+
+  Future<void> _loadComments(String ticketId) async {
+    try {
+      final comments = await context.read<TicketRepository>().fetchComments(
+        ticketId,
+      );
+      if (!mounted) return;
+      setState(() {
+        _commentsMap[ticketId] = comments;
+        _loadingComments = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loadingComments = false);
+      _showError(e);
+    }
+  }
+
+  void _showError(Object e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(e.toString().replaceAll('Exception: ', '')),
+        backgroundColor: const Color(0xFFDC2626),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   @override
   void dispose() {
+    _ticketPollTimer?.cancel();
     _searchController.dispose();
     _replyController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
 
+  /// Built only from what the ticket actually records - creation, whether an
+  /// agent is really assigned, and the current status. Nothing is invented.
   List<TicketTimelineEvent> _getTimelineForTicket(TicketModel ticket) {
-    return _timelineMap.putIfAbsent(ticket.id, () {
-      return [
+    final events = <TicketTimelineEvent>[
+      TicketTimelineEvent(
+        id: 'created',
+        title: 'Ticket Created',
+        description:
+            'Logged from the app · ${ticket.category} · ${ticket.priority} priority.',
+        timestamp: ticket.createdAt,
+      ),
+    ];
+
+    if (ticket.assignedAgentId != null) {
+      events.add(
         TicketTimelineEvent(
-          id: '1',
-          title: 'Ticket Created',
-          description:
-              'Ticket logged by customer with priority ${ticket.priority}.',
-          timestamp: ticket.createdAt,
+          id: 'assigned',
+          title: 'Assigned to Support',
+          description: 'A support agent is handling this ticket.',
+          timestamp: ticket.updatedAt,
         ),
+      );
+    }
+
+    if (ticket.status != 'Open') {
+      events.add(
         TicketTimelineEvent(
-          id: '2',
-          title: 'Agent Assigned',
-          description: 'Assigned to Support Specialist Marcus Vance.',
-          timestamp: ticket.createdAt.add(const Duration(minutes: 6)),
+          id: 'status',
+          title: ticket.status,
+          description: 'Current status, last updated by the support team.',
+          timestamp: ticket.updatedAt,
         ),
-        if (ticket.status != 'Open')
-          TicketTimelineEvent(
-            id: '3',
-            title: 'Under Investigation',
-            description:
-                'Agent initiated diagnostics and verified workspace logs.',
-            timestamp: ticket.createdAt.add(const Duration(minutes: 24)),
-          ),
-        if (ticket.status == 'Resolved' || ticket.status == 'Closed')
-          TicketTimelineEvent(
-            id: '4',
-            title: 'Issue Resolved',
-            description:
-                'Fix deployed and verified across synchronization services.',
-            timestamp: ticket.updatedAt,
-          ),
-      ];
-    });
+      );
+    }
+
+    return events;
   }
 
   List<TicketComment> _getCommentsForTicket(TicketModel ticket) {
-    return _commentsMap.putIfAbsent(ticket.id, () {
-      return [
-        TicketComment(
-          id: 'c1',
-          authorName: 'Marcus Vance',
-          authorRole: 'agent',
-          message:
-              'Hello! I have reviewed your submission regarding "${ticket.subject}". I am verifying the backend sync queue now.',
-          timestamp: ticket.createdAt.add(const Duration(minutes: 10)),
-        ),
-      ];
-    });
+    return _commentsMap[ticket.id] ?? const [];
   }
 
-  void _sendComment() {
+  Future<void> _sendComment() async {
     final text = _replyController.text.trim();
-    if (text.isEmpty || _activeTicket == null) return;
+    final ticket = _activeTicket;
+    if (text.isEmpty || ticket == null || _sendingComment) return;
 
-    final comments = _getCommentsForTicket(_activeTicket!);
-    setState(() {
-      comments.add(
-        TicketComment(
-          id: 'c-${DateTime.now().millisecondsSinceEpoch}',
-          authorName: 'You',
-          authorRole: 'customer',
-          message: text,
-          timestamp: DateTime.now(),
-        ),
+    setState(() => _sendingComment = true);
+    try {
+      await context.read<TicketRepository>().addComment(
+        ticketId: ticket.id,
+        commentText: text,
+        authorName: 'You',
       );
       _replyController.clear();
-    });
+      await _loadComments(ticket.id);
+      // A reply can reopen a resolved ticket server-side, so refresh the list.
+      if (mounted) context.read<TicketBloc>().add(LoadTicketsEvent());
+    } catch (e) {
+      if (mounted) _showError(e);
+    } finally {
+      if (mounted) setState(() => _sendingComment = false);
+    }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
@@ -188,6 +224,10 @@ class _TicketListScreenState extends State<TicketListScreen> {
             );
             if (found.isNotEmpty) {
               _activeTicket = found.first;
+              if (!_commentsMap.containsKey(_activeTicket!.id)) {
+                _loadComments(_activeTicket!.id);
+                _startTicketPolling(_activeTicket!.id);
+              }
             }
           }
 
@@ -404,7 +444,7 @@ class _TicketListScreenState extends State<TicketListScreen> {
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 8.0),
                       child: InkWell(
-                        onTap: () => setState(() => _activeTicket = ticket),
+                        onTap: () => _openTicket(ticket),
                         borderRadius: BorderRadius.circular(12),
                         child: Container(
                           padding: const EdgeInsets.all(12),
@@ -533,7 +573,10 @@ class _TicketListScreenState extends State<TicketListScreen> {
             size: 26,
             color: Color(0xFF0F172A),
           ),
-          onPressed: () => setState(() => _activeTicket = null),
+          onPressed: () {
+            _ticketPollTimer?.cancel();
+            setState(() => _activeTicket = null);
+          },
         ),
         titleSpacing: 0,
         title: Column(
@@ -577,6 +620,96 @@ class _TicketListScreenState extends State<TicketListScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Live Chat Sync Banner
+                  if (ticket.conversationId != null)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEEF2FF),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFC7D2FE)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.forum_rounded,
+                            color: primaryIndigo,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 10),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Linked with Live Chat',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: primaryIndigo,
+                                  ),
+                                ),
+                                Text(
+                                  'Replies here sync live with customer chat.',
+                                  style: TextStyle(
+                                    fontSize: 10.5,
+                                    color: Color(0xFF6366F1),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          InkWell(
+                            onTap: () {
+                              _ticketPollTimer?.cancel();
+                              final currentTicket = _activeTicket;
+                              setState(() => _activeTicket = null);
+                              if (currentTicket != null &&
+                                  widget.onOpenLiveChat != null) {
+                                widget.onOpenLiveChat!(currentTicket);
+                              } else {
+                                widget.onNavigateTab?.call(1);
+                              }
+                            },
+                            borderRadius: BorderRadius.circular(6),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 9,
+                                vertical: 5,
+                              ),
+                              decoration: BoxDecoration(
+                                color: primaryIndigo,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    'Open Live Chat',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  SizedBox(width: 3),
+                                  Icon(
+                                    Icons.arrow_forward_rounded,
+                                    size: 11,
+                                    color: Colors.white,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
                   // Metadata Card
                   Container(
                     padding: const EdgeInsets.all(14),
@@ -612,7 +745,7 @@ class _TicketListScreenState extends State<TicketListScreen> {
                             Expanded(
                               child: _buildMetaItem(
                                 'Assigned Agent',
-                                'Marcus Vance',
+                                ticket.assignedAgentName,
                               ),
                             ),
                             Expanded(
@@ -777,7 +910,18 @@ class _TicketListScreenState extends State<TicketListScreen> {
                   ),
                   const SizedBox(height: 10),
 
-                  if (comments.isEmpty)
+                  if (_loadingComments)
+                    const Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Center(
+                        child: SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      ),
+                    )
+                  else if (comments.isEmpty)
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(14),
@@ -787,7 +931,7 @@ class _TicketListScreenState extends State<TicketListScreen> {
                         border: Border.all(color: const Color(0xFFE2E8F0)),
                       ),
                       child: const Text(
-                        'No replies yet. Marcus Vance is reviewing your request.',
+                        'No replies yet. Our support team will respond here.',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 11,

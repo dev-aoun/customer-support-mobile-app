@@ -1,4 +1,5 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../chat/data/chat_repository.dart';
 import '../data/auth_repository.dart';
 import 'auth_event.dart';
 import 'auth_state.dart';
@@ -6,11 +7,20 @@ import 'auth_state.dart';
 class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final AuthRepository authRepository;
 
-  AuthBloc({required this.authRepository}) : super(AuthInitial()) {
+  /// Cleared on logout. Without this the next person to sign in on the same
+  /// device inherits the previous account's conversation id and the app
+  /// hammers a WebSocket it will never be allowed to join.
+  final ChatRepository? chatRepository;
+
+  AuthBloc({required this.authRepository, this.chatRepository})
+      : super(AuthInitial()) {
     on<AppStartedEvent>(_onAppStarted);
     on<LoginSubmittedEvent>(_onLoginSubmitted);
     on<RegisterSubmittedEvent>(_onRegisterSubmitted);
     on<LogoutRequestedEvent>(_onLogoutRequested);
+    on<UpdateUserEvent>((event, emit) {
+      emit(Authenticated(user: event.user));
+    });
   }
 
   Future<void> _onAppStarted(
@@ -18,9 +28,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     Emitter<AuthState> emit,
   ) async {
     try {
-      final isLoggedIn = await authRepository.isAuthenticated();
-      if (isLoggedIn) {
-        emit(const Authenticated());
+      // Restore the full profile, not just "there is a token" - otherwise the
+      // app comes back with an empty user after a relaunch.
+      final user = await authRepository.getCurrentUser();
+      if (user != null) {
+        emit(Authenticated(user: user));
       } else {
         emit(Unauthenticated());
       }
@@ -68,6 +80,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   ) async {
     emit(AuthLoading());
     await authRepository.logout();
+    chatRepository?.reset();
     emit(Unauthenticated());
   }
 }
